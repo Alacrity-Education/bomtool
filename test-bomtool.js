@@ -242,6 +242,56 @@ const p1 = B.parseBOM('P1.csv', '"Reference","Qty","Value","Footprint","LCSC","T
 p1.multiplier = 1;
 check('orderFrom prefers TME (configured order)', B.mergeBOMs([p1]).rows[0].orderFrom === 'TME');
 
+// ---------- component classes ----------
+check('class: R prefix', B.componentClass(['R7'], 'Resistor_SMD:R_0603_1608Metric') === 'R');
+check('class: potentiometer footprint -> R', B.componentClass(['RV1'], 'Potentiometer_THT:Potentiometer_Bourns_3296W') === 'R');
+check('class: LED footprint -> LED', B.componentClass(['D5'], 'LED_SMD:LED_0603_1608Metric') === 'LED');
+check('class: D without LED footprint -> D', B.componentClass(['D2'], 'Package_TO_SOT_SMD:SOT-23') === 'D');
+check('class: shielded footprint is not LED', B.componentClass(['J1'], 'Connector_RJ:RJ45_Amphenol_Shielded') === 'J');
+check('class: C/L/Q/U/J prefixes', ['C1', 'L2', 'Q3', 'U4', 'J5'].every((r, i) =>
+  B.componentClass([r], 'X:Y') === ['C', 'L', 'Q', 'U', 'J'][i]));
+check('class: SW/AE/P -> Other', ['SW3', 'AE1', 'P1'].every(r => B.componentClass([r], 'X:Y') === 'Other'));
+
+// real files: default headroom 100% leaves quantities untouched (checked above),
+// and every row carries a class annotation
+check('every row has a headroom annotation', res1.rows.every(r => r.headrooms.length > 0));
+check('LED cluster annotated LED - 100%', led[0].headrooms.includes('LED - 100%'), led[0].headrooms);
+check('annotation not in exported CSV (Qty cells are pure numbers)',
+  B.parseCSV(B.resultToCSV(res1)).slice(1).every(r => /^\d+$/.test(r[1])),
+  B.parseCSV(B.resultToCSV(res1)).slice(1).map(r => r[1]).filter(q => !/^\d+$/.test(q)));
+
+// headroom applied per entry, rounded up, per PCB
+const h1 = load('indxworks.csv');
+h1.headroom.LED = 120;   // D3,D4,D5: qty 1 each -> ceil(1.2) = 2 each
+h1.headroom.R = 150;     // 120:4->6, 10K:1->2, 470:2->3
+const resH = B.mergeBOMs([h1]);
+check('LED headroom rounds up per entry', byValue(resH, 'PWR-BLUE')[0].qty === 2, byValue(resH, 'PWR-BLUE')[0]);
+check('R headroom: 4x1.5=6, 1x1.5->2, 2x1.5->3', byValue(resH, '120')[0].qty === 6 &&
+  byValue(resH, '10K')[0].qty === 2 && byValue(resH, '470')[0].qty === 3,
+  resH.rows.filter(r => r.footprint === 'R0603').map(r => [r.values, r.qty]));
+check('headroom annotation shows class and pct', byValue(resH, '120')[0].headrooms.join() === 'R - 150%',
+  byValue(resH, '120')[0].headrooms);
+check('unaffected classes stay at 100%', byValue(resH, '100p')[0].qty === 5);
+
+// float noise: 5 * 1.2 = 6.000000000000001 must not round up to 7
+const f1 = B.parseBOM('F1.csv', '"Reference","Qty","Value","Footprint","LCSC"\n"C1,C2,C3,C4,C5","5","1u","C_0603","C9"\n');
+f1.multiplier = 1; f1.headroom.C = 120;
+check('5 x 120% = 6, not 7', B.mergeBOMs([f1]).rows[0].qty === 6, B.mergeBOMs([f1]).rows[0].qty);
+
+// headroom combines with the board Quantity multiplier
+const f2 = B.parseBOM('F2.csv', '"Reference","Qty","Value","Footprint","LCSC"\n"C1,C2,C3","3","1u","C_0603","C9"\n');
+f2.multiplier = 2; f2.headroom.C = 110;
+check('3 x2 x110% = ceil(6.6) = 7', B.mergeBOMs([f2]).rows[0].qty === 7, B.mergeBOMs([f2]).rows[0].qty);
+
+// per-PCB independence: two boards, different headroom for the same part
+const f3 = B.parseBOM('F3.csv', '"Reference","Qty","Value","Footprint","LCSC"\n"C1","1","1u","C_0603","C9"\n');
+const f4 = B.parseBOM('F4.csv', '"Reference","Qty","Value","Footprint","LCSC"\n"C2","2","1u","C_0603","C9"\n');
+f3.multiplier = 1; f3.headroom.C = 200;
+f4.multiplier = 1;
+const resF = B.mergeBOMs([f3, f4]);
+check('per-PCB headroom: ceil(1x2) + 2 = 4', resF.rows[0].qty === 4, resF.rows[0].qty);
+check('both annotations listed', JSON.stringify(resF.rows[0].headrooms) === '["C - 200%","C - 100%"]', resF.rows[0].headrooms);
+
 // ---------- csv escaping ----------
 check('csv escaping', B.csvEscape('a"b,c') === '"a""b,c"');
 

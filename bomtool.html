@@ -99,6 +99,11 @@ var MANUFACTURER_KEYWORDS = ['TME', 'Farnell', 'Mouser', 'Digikey', 'LCSC', 'SOS
 // column. Edit to taste.
 var IGNORED_COLUMNS = ['Datasheet', 'Sim.Pins', 'Description'];
 
+// Component classes for the per-PCB quantity headroom fields. The class comes
+// from the reference designator prefix, except: footprints containing
+// "potentiometer" are R and LED footprints are LED. Anything else is "Other".
+var COMPONENT_CLASSES = ['R', 'L', 'C', 'D', 'LED', 'Q', 'U', 'J', 'Other'];
+
 // Footprints of resistors/capacitors/inductors/diodes (incl. LEDs) are shortened
 // to <letter><imperial size>, e.g. Resistor_SMD:R_0603_1608Metric -> R0603,
 // LED_SMD:LED_0603_1608Metric -> D0603, Capacitor_SMD:C_1812_4532Metric -> C1812.
@@ -166,6 +171,17 @@ function shortenFootprint(fp) {
   return letter + size[1];
 }
 
+// Headroom class of a component, from its designators and its original
+// (un-shortened) footprint.
+function componentClass(refs, footprintRaw) {
+  var fp = String(footprintRaw);
+  if (/potentiometer/i.test(fp)) return 'R';
+  if (/(^|[_:.\-])led([_:.\-]|$)/i.test(fp)) return 'LED';
+  var m = String(refs[0] || '').match(/^([A-Za-z]+)/);
+  var prefix = m ? m[1].toUpperCase() : '';
+  return COMPONENT_CLASSES.indexOf(prefix) !== -1 ? prefix : 'Other';
+}
+
 // Turn a file name into the slug used in component IDs (BOM_slug:designators).
 function slugify(fileName) {
   return String(fileName).replace(/\.[Cc][Ss][Vv]$/, '').trim();
@@ -176,9 +192,10 @@ function parseBOM(fileName, text) {
   var slug = slugify(fileName);
   var rows = parseCSV(text);
   var bom = {
-    fileName: fileName, slug: slug, multiplier: 1,
+    fileName: fileName, slug: slug, multiplier: 1, headroom: {},
     entries: [], specColumns: [], mfrColumns: [], parseWarnings: []
   };
+  COMPONENT_CLASSES.forEach(function (c) { bom.headroom[c] = 100; });
   if (rows.length === 0) { bom.parseWarnings.push(slug + ': file is empty'); return bom; }
 
   var headers = rows[0];
@@ -195,7 +212,7 @@ function parseBOM(fileName, text) {
 
   for (var r = 1; r < rows.length; r++) {
     var cells = rows[r];
-    var entry = { refsRaw: '', refs: [], qty: 0, qtyRaw: '', value: '', footprint: '', specs: {}, mfr: {}, line: r + 1 };
+    var entry = { refsRaw: '', refs: [], qty: 0, qtyRaw: '', value: '', footprint: '', footprintRaw: '', specs: {}, mfr: {}, line: r + 1 };
     for (var c = 0; c < cols.length; c++) {
       var v = String(cells[c] === undefined ? '' : cells[c]).trim();
       var col = cols[c];
@@ -211,6 +228,7 @@ function parseBOM(fileName, text) {
         entry.value = v;
       } else if (col.type === 'footprint') {
         entry.footprint = shortenFootprint(v);
+        entry.footprintRaw = v;
       } else if (col.type === 'spec') {
         if (v !== '' && entry.specs[col.name] === undefined) entry.specs[col.name] = v;
       } else if (col.type === 'mfr') {
@@ -218,6 +236,7 @@ function parseBOM(fileName, text) {
       }
     }
     entry.id = slug + ':' + entry.refs.join(',');
+    entry.cls = componentClass(entry.refs, entry.footprintRaw);
     bom.entries.push(entry);
   }
   return bom;
@@ -271,13 +290,21 @@ function mergeBOMs(boms) {
     });
   });
 
-  // group by Footprint + SPEC set
+  // per-PCB, per-class headroom percentage (default 100 = no extra)
+  function headroomPct(b, e) {
+    var pct = b.headroom ? b.headroom[e.cls] : undefined;
+    return pct === undefined || pct === null ? 100 : pct;
+  }
+
+  // group by Footprint + SPEC set. Effective qty = qty x board Quantity x
+  // headroom%, rounded up to the unit (epsilon guards float noise like 6.000...01)
   var groups = new Map();
   boms.forEach(function (b) {
     b.entries.forEach(function (e) {
       var key = groupKey(e);
       if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push({ entry: e, bom: b, effQty: e.qty * b.multiplier });
+      var eff = Math.ceil(e.qty * b.multiplier * headroomPct(b, e) / 100 - 1e-9);
+      groups.get(key).push({ entry: e, bom: b, effQty: eff });
     });
   });
 
@@ -390,9 +417,17 @@ function mergeBOMs(boms) {
       if (vs.length) specs[s] = vs.join('; ');
     });
 
+    // distinct "class - headroom%" labels, shown next to Qty (not exported)
+    var headrooms = [];
+    members.forEach(function (m) {
+      var label = m.entry.cls + ' - ' + headroomPct(m.bom, m.entry) + '%';
+      if (headrooms.indexOf(label) === -1) headrooms.push(label);
+    });
+
     rows.push({
       ids: members.map(function (m) { return m.entry.id; }),
       qty: totalQty,
+      headrooms: headrooms,
       values: values,
       footprint: footprints.join('; '),
       specs: specs,
@@ -440,7 +475,8 @@ function resultToCSV(result) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     MANUFACTURER_KEYWORDS: MANUFACTURER_KEYWORDS, IGNORED_COLUMNS: IGNORED_COLUMNS,
-    FOOTPRINT_SHORT_LETTERS: FOOTPRINT_SHORT_LETTERS,
+    FOOTPRINT_SHORT_LETTERS: FOOTPRINT_SHORT_LETTERS, COMPONENT_CLASSES: COMPONENT_CLASSES,
+    componentClass: componentClass,
     parseCSV: parseCSV, classifyColumn: classifyColumn, shortenFootprint: shortenFootprint,
     slugify: slugify, parseBOM: parseBOM, groupKey: groupKey, mergeBOMs: mergeBOMs,
     csvEscape: csvEscape, resultToCSV: resultToCSV
@@ -487,6 +523,7 @@ if (typeof document !== 'undefined') (function () {
         var bom = parseBOM(file.name, String(reader.result));
         if (existing >= 0) {
           bom.multiplier = uploadedBoms[existing].multiplier; // re-upload replaces, keeps quantity
+          bom.headroom = uploadedBoms[existing].headroom;     // ...and headroom settings
           uploadedBoms[existing] = bom;
         } else {
           bom.slug = uniqueSlug(bom.slug);
@@ -535,6 +572,15 @@ if (typeof document !== 'undefined') (function () {
             '<span class="input-group-text">Quantity</span>' +
             '<input type="number" class="form-control qty-input" min="0" step="1" value="' + esc(bom.multiplier) + '">' +
           '</div>' +
+          '<div class="text-muted small mt-2 mb-1">Headroom % per class</div>' +
+          '<div class="headroom-grid">' +
+            COMPONENT_CLASSES.map(function (c) {
+              return '<div class="input-group input-group-sm">' +
+                '<span class="input-group-text hr-label">' + esc(c) + '</span>' +
+                '<input type="number" class="form-control hr-input" data-cls="' + esc(c) + '" min="0" step="10" value="' + esc(bom.headroom[c]) + '">' +
+              '</div>';
+            }).join('') +
+          '</div>' +
         '</div>';
       card.querySelector('.btn-close').addEventListener('click', function () {
         uploadedBoms.splice(idx, 1);
@@ -545,6 +591,13 @@ if (typeof document !== 'undefined') (function () {
         var n = parseFloat(this.value);
         bom.multiplier = isFinite(n) && n >= 0 ? n : 0;
         markStale();
+      });
+      Array.prototype.forEach.call(card.querySelectorAll('.hr-input'), function (inp) {
+        inp.addEventListener('input', function () {
+          var n = parseFloat(this.value);
+          bom.headroom[this.dataset.cls] = isFinite(n) && n >= 0 ? n : 100;
+          markStale();
+        });
       });
       fileCards.appendChild(card);
     });
@@ -585,7 +638,8 @@ if (typeof document !== 'undefined') (function () {
     resultTable.querySelector('tbody').innerHTML = result.rows.map(function (row) {
       var tds = [
         '<td class="refs-cell small">' + row.ids.map(esc).join('<br>') + '</td>',
-        '<td class="fw-semibold">' + esc(row.qty) + '</td>',
+        '<td class="fw-semibold text-nowrap">' + esc(row.qty) +
+          (row.headrooms.length ? ' <span class="text-muted fw-normal small">(' + esc(row.headrooms.join(', ')) + ')</span>' : '') + '</td>',
         '<td>' + row.values.map(esc).join('<br>') + '</td>',
         '<td class="small text-muted footprint-cell">' + esc(row.footprint) + '</td>'
       ];
@@ -661,6 +715,9 @@ if (typeof document !== 'undefined') (function () {
   .dropzone:hover, .dropzone.dragover { border-color: #0d6efd; background: #eef4ff; color: #0d6efd; }
   .bom-card { border-left: 4px solid #0d6efd; }
   .quantity-group { max-width: 180px; }
+  .headroom-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .25rem; }
+  .headroom-grid .hr-label { min-width: 2.9rem; justify-content: center; padding: .25rem; font-size: .7rem; }
+  .headroom-grid .form-control { padding-left: .3rem; padding-right: .3rem; }
   #resultWrap { background: #fff; min-height: 300px; }
   #resultTable thead th { position: sticky; top: 0; z-index: 1; white-space: nowrap; }
   .footprint-cell, .refs-cell { max-width: 260px; overflow-wrap: anywhere; }

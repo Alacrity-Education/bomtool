@@ -15,6 +15,13 @@ the page (the only external reference is the Bootstrap CSS stylesheet).
    distributors for which it carries at least one ordering code.
 2. Set the **Quantity** on each card — how many of that board you are building.
    All quantities from that BOM are multiplied by it.
+   Each card also has per-class **Headroom %** fields (default 100% = no extra):
+   quantities of that class are scaled by the percentage and rounded up, so you
+   can order spares of cheap parts. Classes: R (incl. potentiometer footprints),
+   L, C, D, LED (LED footprints), Q, U, J, Other — decided by the reference
+   prefix except where the footprint says otherwise. The merged table shows the
+   class and applied headroom in gray next to each quantity (display only, not
+   exported to the CSV).
 3. Press **Generate**. The right pane shows the merged BOM, a per-supplier
    summary, and any warnings.
 4. Press **Download CSV** to export the merged table.
@@ -31,6 +38,7 @@ Three arrays at the top of the `<script>` block:
 | `MANUFACTURER_KEYWORDS` | A column whose header *contains* any of these words (case-insensitive) is an ordering-code column. The array order is also the supplier preference order. | `TME, Farnell, Mouser, Digikey, LCSC, SOS, conex, protehno` |
 | `IGNORED_COLUMNS` | Columns removed entirely (exact name, case-insensitive). | `Datasheet, Sim.Pins, Description` |
 | `FOOTPRINT_SHORT_LETTERS` | KiCad library categories whose footprints are shortened, and the letter used. | `resistor→R, capacitor→C, inductor→L, diode→D, led→D` |
+| `COMPONENT_CLASSES` | Component classes offered as per-PCB headroom fields. | `R, L, C, D, LED, Q, U, J, Other` |
 
 ## The merge process
 
@@ -87,7 +95,8 @@ entries with no codes can never bridge a Value difference.
 
 ### 5. Field merging per resulting line
 
-- **Qty** — sum of `entry Qty × board Quantity` over all members.
+- **Qty** — sum over all members of `ceil(entry Qty × board Quantity ×
+  class headroom%)`, i.e. headroom rounds up per entry, per board.
 - **References** — the member IDs, listed.
 - **Value / Footprint / SPECs** — distinct values concatenated the same way as
   References (`; ` in the CSV, line breaks in the table).
