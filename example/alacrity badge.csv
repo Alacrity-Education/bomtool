@@ -1,0 +1,6 @@
+"Reference","Qty","Value","Footprint","LCSC"
+"AE1","1","Antenna_Loop","",""
+"C1,C2","2","100n","Capacitor_SMD:C_0603_1608Metric","C1591"
+"D1,D2,D3,D4,D5,D6,D7,D8","8","LED-BLUE","LED_SMD:LED_0603_1608Metric","C965807"
+"R1,R2,R3,R4,R5,R6,R7,R8","8","470","Capacitor_SMD:C_0603_1608Metric","C2907172"
+"U1","1","ST25DV04K-IER8C3","Package_DFN_QFN:DFN-8-1EP_3x2mm_P0.5mm_EP1.36x1.46mm","C2908287"
