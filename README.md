@@ -5,6 +5,9 @@ from KiCad into one consolidated parts order for a batch of different PCBs.
 Open the file directly in a browser — there is no backend and no data ever leaves
 the page (the only external reference is the Bootstrap CSS stylesheet).
 
+**Use it online: <https://alacrity-education.github.io/bomtool/>** (deployed from
+`main` via GitHub Pages; your CSVs are still processed entirely in your browser).
+
 ## Usage
 
 1. Drag & drop BOM CSVs onto the left pane (or click it to browse).
