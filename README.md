@@ -1,5 +1,7 @@
 # bomtool — KiCad BOM Merger
 
+![KiCAD BOM Merge Tool merging four example BOMs](demo.png)
+
 A single-file, fully static web tool (`bomtool.html`) that merges BOM CSVs exported
 from KiCad into one consolidated parts order for a batch of different PCBs.
 Open the file directly in a browser — there is no backend and no data ever leaves
