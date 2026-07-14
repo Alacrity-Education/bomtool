@@ -35,6 +35,7 @@
   </g>
 </svg>
       <h3 class="mb-0">KiCAD BOM Merge Tool</h3>
+      <button id="themeToggle" type="button" class="btn btn-outline-secondary btn-sm ms-auto">&#127769; Dark</button>
     </div>
     <div class="row g-3 flex-grow-1">
 
@@ -65,7 +66,7 @@
             Upload one or more KiCad BOM CSVs on the left, set the board quantities, then press <b>Generate</b>.
           </div>
           <table id="resultTable" class="table table-sm table-striped table-hover align-middle mb-0 d-none">
-            <thead class="table-light"></thead>
+            <thead></thead>
             <tbody></tbody>
           </table>
         </div>
@@ -192,7 +193,7 @@ function parseBOM(fileName, text) {
   var slug = slugify(fileName);
   var rows = parseCSV(text);
   var bom = {
-    fileName: fileName, slug: slug, multiplier: 1, headroom: {},
+    fileName: fileName, slug: slug, multiplier: 1, headroom: {}, sourceText: text,
     entries: [], specColumns: [], mfrColumns: [], parseWarnings: []
   };
   COMPONENT_CLASSES.forEach(function (c) { bom.headroom[c] = 100; });
@@ -491,6 +492,44 @@ if (typeof document !== 'undefined') (function () {
   var lastResult = null;
   var staleSummary = 'Inputs changed — press Generate to refresh';
 
+  // ---- persistence (best-effort: localStorage may be unavailable) ----
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
+  };
+
+  function saveState() {
+    store.set('bomtool.state', JSON.stringify({
+      v: 1,
+      boms: uploadedBoms.map(function (b) {
+        return { fileName: b.fileName, text: b.sourceText, multiplier: b.multiplier, headroom: b.headroom };
+      })
+    }));
+  }
+
+  function restoreState() {
+    var raw = store.get('bomtool.state');
+    if (!raw) return;
+    try {
+      var st = JSON.parse(raw);
+      (st.boms || []).forEach(function (sb) {
+        if (!sb || typeof sb.text !== 'string') return;
+        var bom = parseBOM(sb.fileName, sb.text);
+        bom.slug = uniqueSlug(bom.slug);
+        bom.entries.forEach(function (e) { e.id = bom.slug + ':' + e.refs.join(','); });
+        var n = parseFloat(sb.multiplier);
+        bom.multiplier = isFinite(n) && n >= 0 ? n : 1;
+        if (sb.headroom) COMPONENT_CLASSES.forEach(function (c) {
+          var h = parseFloat(sb.headroom[c]);
+          if (isFinite(h) && h >= 0) bom.headroom[c] = h;
+        });
+        uploadedBoms.push(bom);
+      });
+    } catch (e) { return; }
+    renderCards();
+    if (uploadedBoms.length) generate();
+  }
+
   var dropzone = document.getElementById('dropzone');
   var fileInput = document.getElementById('fileInput');
   var fileCards = document.getElementById('fileCards');
@@ -533,6 +572,7 @@ if (typeof document !== 'undefined') (function () {
         }
         renderCards();
         markStale();
+        saveState();
       };
       reader.readAsText(file);
     });
@@ -586,17 +626,20 @@ if (typeof document !== 'undefined') (function () {
         uploadedBoms.splice(idx, 1);
         renderCards();
         markStale();
+        saveState();
       });
       card.querySelector('.qty-input').addEventListener('input', function () {
         var n = parseFloat(this.value);
         bom.multiplier = isFinite(n) && n >= 0 ? n : 0;
         markStale();
+        saveState();
       });
       Array.prototype.forEach.call(card.querySelectorAll('.hr-input'), function (inp) {
         inp.addEventListener('input', function () {
           var n = parseFloat(this.value);
           bom.headroom[this.dataset.cls] = isFinite(n) && n >= 0 ? n : 100;
           markStale();
+          saveState();
         });
       });
       fileCards.appendChild(card);
@@ -661,9 +704,25 @@ if (typeof document !== 'undefined') (function () {
     downloadBtn.disabled = false;
   }
 
-  generateBtn.addEventListener('click', function () {
+  function generate() {
     lastResult = mergeBOMs(uploadedBoms);
     renderResult(lastResult);
+  }
+  generateBtn.addEventListener('click', generate);
+
+  // ---- light/dark mode, preference kept in localStorage ----
+  var themeBtn = document.getElementById('themeToggle');
+  function applyTheme(t) {
+    document.documentElement.setAttribute('data-bs-theme', t);
+    themeBtn.innerHTML = t === 'dark' ? '&#9728;&#65039; Light' : '&#127769; Dark';
+  }
+  var theme = store.get('bomtool.theme') ||
+    (typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  applyTheme(theme);
+  themeBtn.addEventListener('click', function () {
+    theme = theme === 'dark' ? 'light' : 'dark';
+    applyTheme(theme);
+    store.set('bomtool.theme', theme);
   });
 
   downloadBtn.addEventListener('click', function () {
@@ -695,31 +754,36 @@ if (typeof document !== 'undefined') (function () {
   dropzone.addEventListener('drop', function (e) {
     if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
   });
+
+  // restore the last working point (files + settings) from localStorage
+  restoreState();
 })();
 </script>
 
 <style>
+  :root { --bomtool-bg: #f6f7f9; --bomtool-panel: #fff; --bomtool-drop-hover: #eef4ff; }
+  [data-bs-theme="dark"] { --bomtool-bg: #131519; --bomtool-panel: #1b1e24; --bomtool-drop-hover: #1c2536; }
   html, body { height: 100%; }
-  body { background: #f6f7f9; }
+  body { background: var(--bomtool-bg); }
   .container-fluid.h-100 { min-height: 100vh; }
   .brand-logo { height: 52px; width: auto; }
   .dropzone {
-    border: 2px dashed #adb5bd;
+    border: 2px dashed #889;
     border-radius: .75rem;
-    background: #fff;
-    color: #495057;
+    background: var(--bomtool-panel);
+    color: var(--bs-secondary-color);
     cursor: pointer;
     min-height: 140px;
     transition: border-color .15s, background .15s;
   }
-  .dropzone:hover, .dropzone.dragover { border-color: #0d6efd; background: #eef4ff; color: #0d6efd; }
+  .dropzone:hover, .dropzone.dragover { border-color: #0d6efd; background: var(--bomtool-drop-hover); color: #0d6efd; }
   .bom-card { border-left: 4px solid #0d6efd; }
   .quantity-group { max-width: 180px; }
   .headroom-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .25rem; }
   .headroom-grid .hr-label { min-width: 2.9rem; justify-content: center; padding: .25rem; font-size: .7rem; }
   .headroom-grid .form-control { padding-left: .3rem; padding-right: .3rem; }
-  #resultWrap { background: #fff; min-height: 300px; }
-  #resultTable thead th { position: sticky; top: 0; z-index: 1; white-space: nowrap; }
+  #resultWrap { background: var(--bomtool-panel); min-height: 300px; }
+  #resultTable thead th { position: sticky; top: 0; z-index: 1; white-space: nowrap; background: var(--bs-tertiary-bg); }
   .footprint-cell, .refs-cell { max-width: 260px; overflow-wrap: anywhere; }
   .warnings-box { max-height: 540px; overflow-y: auto; }
 </style>
