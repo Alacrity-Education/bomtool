@@ -786,15 +786,18 @@ if (typeof document !== 'undefined') (function () {
      the row/cell highlights proper dark equivalents */
   [data-bs-theme="dark"] .table-danger {
     --bs-table-bg: #3b1519; --bs-table-striped-bg: #431a1e; --bs-table-hover-bg: #4b2025;
-    --bs-table-color: #f4c2c5; --bs-table-border-color: #5c2b30;
+    --bs-table-color: #f4c2c5; --bs-table-striped-color: #f4c2c5; --bs-table-hover-color: #f4c2c5;
+    --bs-table-active-color: #f4c2c5; --bs-table-border-color: #5c2b30;
   }
   [data-bs-theme="dark"] .table-warning {
     --bs-table-bg: #3a2e0f; --bs-table-striped-bg: #423513; --bs-table-hover-bg: #4a3c18;
-    --bs-table-color: #f0d98c; --bs-table-border-color: #5a4a20;
+    --bs-table-color: #f0d98c; --bs-table-striped-color: #f0d98c; --bs-table-hover-color: #f0d98c;
+    --bs-table-active-color: #f0d98c; --bs-table-border-color: #5a4a20;
   }
   [data-bs-theme="dark"] .table-success {
     --bs-table-bg: #11321f; --bs-table-striped-bg: #153a25; --bs-table-hover-bg: #1a422b;
-    --bs-table-color: #a9dfbf; --bs-table-border-color: #24503a;
+    --bs-table-color: #a9dfbf; --bs-table-striped-color: #a9dfbf; --bs-table-hover-color: #a9dfbf;
+    --bs-table-active-color: #a9dfbf; --bs-table-border-color: #24503a;
   }
   #resultWrap { background: var(--bomtool-panel); min-height: 300px; }
   #resultTable thead th { position: sticky; top: 0; z-index: 1; white-space: nowrap; background: var(--bs-tertiary-bg); }
