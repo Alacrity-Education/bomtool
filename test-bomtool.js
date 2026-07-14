@@ -55,6 +55,7 @@ check('indx mouser code trimmed', indx.entries.find(e => e.refsRaw === 'U3').mfr
 check('indx TME column detected', indx.mfrColumns.includes('TME'), indx.mfrColumns);
 check('entry id format', candu.entries[0].id === 'CANDU:C1,C2,C3,C4', candu.entries[0].id);
 check('badge footprints shortened at parse', badge.entries.find(e => e.refsRaw.startsWith('C1')).footprint === 'C0603');
+check('parseBOM keeps source text (for persistence)', badge.sourceText.startsWith('"Reference"') && badge.sourceText.length > 300);
 
 // ---------- merge of all 5, multiplier 1 ----------
 const res1 = B.mergeBOMs([badge, candu, indx, midea, pipsu]);

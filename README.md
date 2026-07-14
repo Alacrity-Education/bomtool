@@ -31,6 +31,11 @@ the page (the only external reference is the Bootstrap CSS stylesheet).
 Re-uploading a file with the same name replaces it (keeping its Quantity).
 Changing any input after generating shows a "press Generate to refresh" hint.
 
+The header has a light/dark mode toggle, and the tool remembers your last
+working point — uploaded BOMs, board Quantities, headroom settings and the
+theme are kept in the browser's localStorage and restored (and re-merged)
+next time you open it.
+
 ## Configuration
 
 Three arrays at the top of the `<script>` block:
