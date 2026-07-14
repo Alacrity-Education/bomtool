@@ -782,6 +782,20 @@ if (typeof document !== 'undefined') (function () {
   .headroom-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .25rem; }
   .headroom-grid .hr-label { min-width: 2.9rem; justify-content: center; padding: .25rem; font-size: .7rem; }
   .headroom-grid .form-control { padding-left: .3rem; padding-right: .3rem; }
+  /* Bootstrap's table-* variant classes are hardcoded to light colors — give
+     the row/cell highlights proper dark equivalents */
+  [data-bs-theme="dark"] .table-danger {
+    --bs-table-bg: #3b1519; --bs-table-striped-bg: #431a1e; --bs-table-hover-bg: #4b2025;
+    --bs-table-color: #f4c2c5; --bs-table-border-color: #5c2b30;
+  }
+  [data-bs-theme="dark"] .table-warning {
+    --bs-table-bg: #3a2e0f; --bs-table-striped-bg: #423513; --bs-table-hover-bg: #4a3c18;
+    --bs-table-color: #f0d98c; --bs-table-border-color: #5a4a20;
+  }
+  [data-bs-theme="dark"] .table-success {
+    --bs-table-bg: #11321f; --bs-table-striped-bg: #153a25; --bs-table-hover-bg: #1a422b;
+    --bs-table-color: #a9dfbf; --bs-table-border-color: #24503a;
+  }
   #resultWrap { background: var(--bomtool-panel); min-height: 300px; }
   #resultTable thead th { position: sticky; top: 0; z-index: 1; white-space: nowrap; background: var(--bs-tertiary-bg); }
   .footprint-cell, .refs-cell { max-width: 260px; overflow-wrap: anywhere; }
